@@ -25,23 +25,16 @@ RenderFrame:: proc() {
         rl.DrawRectangle( c.int(player.position.x), c.int(player.position.y), PLAYER_WIDTH, PLAYER_HEIGHT, rl.MAROON)
 
 		// Draw meteors
-		for i:= 0; i < level*MAX_BIG_METEORS; i+=1
+		for i:= 0; i < active_entities; i+=1
 		{
-			if bigMeteor[i].active do rl.DrawCircleV(bigMeteor[i].position, bigMeteor[i].radius, rl.DARKGRAY)
+			if entities[i].active do rl.DrawCircleV(entities[i].position, entities[i].radius, rl.DARKGRAY)
+			//if entities[i].active {
+		//		rl.DrawRectanglePro( entities[i].collider,  entities[i].position, 0, entities[i].color)
+		//	}
 		}
-		for i:= 0; i < level*MAX_MEDIUM_METEORS; i+=1
-		{
-			if mediumMeteor[i].active do rl.DrawCircleV(mediumMeteor[i].position, mediumMeteor[i].radius, rl.GRAY)
-		}
-			
-		for i:= 0; i < level*MAX_SMALL_METEORS; i+=1
-		{
-			if smallMeteor[i].active do rl.DrawCircleV(smallMeteor[i].position, smallMeteor[i].radius, rl.GRAY)
-		}
-			
 			
 		// Draw shoot
-		for i:= 0; i < PLAYER_MAX_SHOOTS; i+=1
+		for i:= 0; i < SHOTS_MAX; i+=1
 		{
 			if shoot[i].active do rl.DrawCircleV(shoot[i].position, shoot[i].radius, shoot[i].color)
 		}
