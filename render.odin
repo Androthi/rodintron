@@ -21,7 +21,6 @@ RenderFrame:: proc() {
 		// Draw entities
 		for i:= 0; i < active_entities; i+=1
 		{
-			//if entities[i].active do rl.DrawCircleV(entities[i].position, entities[i].radius, rl.DARKGRAY)
 			if entities[i].active {
 				rl.DrawRectangleV( { entities[i].position.x, entities[i].position.y }, {ROB_BRUTE_WIDTH, ROB_BRUTE_HEIGHT }, entities[i].color)
 			}

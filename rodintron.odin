@@ -134,11 +134,11 @@ UpdateGame :: proc() {
 
 		if (!pause)
 		{ 
-
 			// Player logic: weapon rotation
 			// to get radian? math.sin(player.rotation*rl.DEG2RAD)*PLAYER_SPEED;
 			if rl.IsKeyDown(.LEFT) do player.rotation -= 5
 			if rl.IsKeyDown(.RIGHT) do player.rotation += 5
+			
 			
 			// not strictly necessary
 			if player.rotation > 360 do player.rotation = 0
@@ -159,12 +159,9 @@ UpdateGame :: proc() {
             if player.position.y < 0 do player.position.y = 0
 
 			// Player shot logic
-			if rl.IsKeyPressed(.SPACE)
-			{
-                for i:= 0; i < SHOTS_MAX; i+=1
-				{
-                    if !shot[i].active
-					{
+			if rl.IsKeyPressed(.SPACE) || rl.IsMouseButtonPressed(.LEFT) {
+                for i:= 0; i < SHOTS_MAX; i+=1 {
+                    if !shot[i].active {
                         rl.PlaySound(snd_lazer1)
 						shot[i].position = (rl.Vector2){ player.position.x + math.sin(player.rotation*rl.DEG2RAD)*(PLAYER_HEIGHT), player.position.y - math.cos(player.rotation*rl.DEG2RAD)*(PLAYER_HEIGHT) }
 						shot[i].active = true
@@ -249,7 +246,6 @@ UpdateGame :: proc() {
 			for i := 0; i < SHOTS_MAX; i += 1 {
 				if shot[i].active {
 					for a := 0; a < active_entities; a += 1 {
-						//if entities[a].active && rl.CheckCollisionCircles(shot[i].position, shot[i].radius, entities[a].position, entities[a].radius)
 						if entities[a].active && rl.CheckCollisionCircleRec(shot[i].position, shot[i].radius, { entities[a].position.x, entities[a].position.y, ROB_BRUTE_WIDTH, ROB_BRUTE_HEIGHT} ) {
 							rl.PlaySound(snd_explosion1)
 							score += 10
