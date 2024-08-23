@@ -5,8 +5,6 @@ package rodintron
 import "core:math"
 import rl "vendor:raylib"
 import "core:c"
-//import "core:fmt"
-//import "core:math/rand"
 
 PLAYER_HEIGHT       :: 45.0
 PLAYER_WIDTH	    :: 20.0
@@ -21,11 +19,11 @@ ROB_BRUTE_WIDTH     :: 30
 ROB_BRUTE_HEIGHT    :: 50
 ROB_BRUTE_SPEED		:: 2
 
-screenWidth			:i32: 1600
-screenHeight		:i32: 1200
+screenWidth				:i32: 1200
+screenHeight			:i32: 800
 render_screen_width     :i32 = screenWidth
 render_screen_height    :i32 = screenHeight
-
+rot						:rl.Vector2
 
 MAX_ENTITIES        ::100
 MAX_LEVEL			:: 600
@@ -70,10 +68,9 @@ Player_Shot :: struct {
 }
 
 Entity :: struct {
-    position    :rl.Vector2,
+    position    :rl.Vector2, //? we can get rid of this and justa use the collider.x and collider.y positions
     speed       :rl.Vector2,
 	collider	:rl.Rectangle,	// temporary collider + drawing shape
-	radius		:f32,			// temp
     color       :rl.Color,		// temp for shape. will be replaced by sprite colors.
     active      :bool,
 }
@@ -135,12 +132,10 @@ UpdateGame :: proc() {
 		if (!pause)
 		{ 
 			// Player logic: weapon rotation
-			// to get radian? math.sin(player.rotation*rl.DEG2RAD)*PLAYER_SPEED;
 			if rl.IsKeyDown(.LEFT) do player.rotation -= 5
-			if rl.IsKeyDown(.RIGHT) do player.rotation += 5
+			if rl.IsKeyDown(.RIGHT) do player.rotation += 5			
 			
-			
-			// not strictly necessary
+			//? not strictly necessary
 			if player.rotation > 360 do player.rotation = 0
 			if player.rotation < 0 do player.rotation = 360
 
@@ -158,6 +153,13 @@ UpdateGame :: proc() {
             if player.position.y + PLAYER_HEIGHT > f32(screenHeight) do player.position.y = f32(screenHeight) - PLAYER_HEIGHT
             if player.position.y < 0 do player.position.y = 0
 
+			// get mouse position and adjust rotation of 'weapon'
+			mpos := rl.GetMousePosition()
+			hlen := (rl.Vector2) { mpos.x - (player.position.x ), mpos.y - (player.position.y)}
+			rot = math.atan2_f32 (hlen.y, hlen.x)
+			player.rotation = rot.x*rl.RAD2DEG
+			player.rotation += 90
+			
 			// Player shot logic
 			if rl.IsKeyPressed(.SPACE) || rl.IsMouseButtonPressed(.LEFT) {
                 for i:= 0; i < SHOTS_MAX; i+=1 {
@@ -165,8 +167,8 @@ UpdateGame :: proc() {
                         rl.PlaySound(snd_lazer1)
 						shot[i].position = (rl.Vector2){ player.position.x + math.sin(player.rotation*rl.DEG2RAD)*(PLAYER_HEIGHT), player.position.y - math.cos(player.rotation*rl.DEG2RAD)*(PLAYER_HEIGHT) }
 						shot[i].active = true
-						shot[i].speed.x = 1.5*math.sin(player.rotation*rl.DEG2RAD)*SHOTS_SPEED
-						shot[i].speed.y = 1.5*math.cos(player.rotation*rl.DEG2RAD)*SHOTS_SPEED
+						shot[i].speed.x = 2.5*math.sin(player.rotation*rl.DEG2RAD)*SHOTS_SPEED
+						shot[i].speed.y = 2.5*math.cos(player.rotation*rl.DEG2RAD)*SHOTS_SPEED
 						shot[i].rotation = player.rotation
 						break
 					}
@@ -177,7 +179,6 @@ UpdateGame :: proc() {
 			for i:= 0; i < SHOTS_MAX; i+=1 {
 				if shot[i].active do shot[i].life_span+=1
 			}
-				
 				
 			// Shot logic
 			for i:= 0; i < SHOTS_MAX; i+=1 {
@@ -224,22 +225,17 @@ UpdateGame :: proc() {
 
 			if gameOver do rl.PlaySound(snd_explosion1)
 
+			// move entities towards player
 			for i := 0; i < active_entities; i += 1 {
 				
-				// move entities
 				if entities[i].active {
-					entities[i].position.x += entities[i].speed.x
-					entities[i].position.y += entities[i].speed.y
+					if entities[i].position.x < player.position.x do entities[i].position.x += entities[i].speed.x
+					else do entities[i].position.x -= entities[i].speed.x
+					if entities[i].position.y < player.position.y do entities[i].position.y += entities[i].speed.y
+					else do entities[i].position.y -= entities[i].speed.y
+
 				}
 
-				// check entity collision with game boundaries
-				// just bounce for now, we want these to be chancing the player down .. note some entities can escape with this code.
-				// but it's a tempt thing.
-				if entities[i].position.x + ROB_BRUTE_WIDTH > f32(screenWidth) do change_entity_direction(&entities[i])
-				if entities[i].position.x < 0 do change_entity_direction(&entities[i])
-				if entities[i].position.y + ROB_BRUTE_HEIGHT > f32(screenHeight) do change_entity_direction(&entities[i])
-				if entities[i].position.y < 0 do change_entity_direction(&entities[i])
-				
 			}
 
 			// Collision logic: player-shots vs robots
@@ -270,9 +266,10 @@ UpdateGame :: proc() {
 	} else {
 		if rl.IsKeyPressed(.ENTER)
 		{
+			level = 1
+			score = 0
 			InitGame()
 			gameOver = false
-			score = 0
 		}
 	}
 }
@@ -324,18 +321,11 @@ InitGame :: proc() {
 
 		entities[i].position = { f32(posx), f32(posy) }
 		
-		// temp, add randomize speed for now
-		for {
-			velx = rl.GetRandomValue(-ROB_BRUTE_SPEED, ROB_BRUTE_SPEED)
-			vely = rl.GetRandomValue(-ROB_BRUTE_SPEED, ROB_BRUTE_SPEED)
-			if velx == 0 && vely == 0 {
-				velx = rl.GetRandomValue(-ROB_BRUTE_SPEED, ROB_BRUTE_SPEED)
-				vely = rl.GetRandomValue(-ROB_BRUTE_SPEED, ROB_BRUTE_SPEED)
-			} else do break
-		}
+		difficulty_multiplier := math.ceil(f32(level) * 0.5)
+		velx = rl.GetRandomValue(1, ROB_BRUTE_SPEED) * c.int(difficulty_multiplier)
+		vely = rl.GetRandomValue(1, ROB_BRUTE_SPEED) * c.int(difficulty_multiplier)
 
 		entities[i].speed = { f32(velx), f32(vely) }
-		entities[i].radius = 40 // temp
 		entities[i].collider = (rl.Rectangle){ f32(posx), f32(posy), ROB_BRUTE_WIDTH, ROB_BRUTE_HEIGHT }
 		entities[i].active = true
 		entities[i].color = rl.BLUE

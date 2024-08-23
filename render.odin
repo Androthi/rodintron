@@ -18,6 +18,8 @@ RenderFrame:: proc() {
 		// Draw player
         rl.DrawRectangle( c.int(player.position.x), c.int(player.position.y), PLAYER_WIDTH, PLAYER_HEIGHT, rl.MAROON)
 
+		//> Draw 'weapon'
+		//(rl.Vector2){ player.position.x + math.sin(player.rotation*rl.DEG2RAD)*(PLAYER_HEIGHT), player.position.y - math.cos(player.rotation*rl.DEG2RAD)*(PLAYER_HEIGHT) }
 		// Draw entities
 		for i:= 0; i < active_entities; i+=1
 		{
@@ -38,6 +40,9 @@ RenderFrame:: proc() {
 
 
 		rl.DrawText( rl.TextFormat("Score %v", score), 10, 10, 20, rl.WHITE)
+		rl.DrawText( rl.TextFormat("Prot %v", player.rotation), 10, 40, 20, rl.WHITE)
+
+
 		
 	} else { rl.DrawText("PRESS [ENTER] TO PLAY AGAIN", screenWidth/2 - rl.MeasureText("PRESS [ENTER] TO PLAY AGAIN", 20)/2, screenHeight/2, 20, rl.GRAY) }
 
