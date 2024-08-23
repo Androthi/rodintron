@@ -6,7 +6,7 @@ import "core:math"
 import rl "vendor:raylib"
 import "core:c"
 
-GOD_MODE			:: true
+GOD_MODE			:: false
 
 PLAYER_HEIGHT       :: 45.0
 PLAYER_WIDTH	    :: 20.0
@@ -53,6 +53,7 @@ shot		:[SHOTS_MAX]Player_Shot
 snd_lazer1		:rl.Sound
 snd_explosion1	:rl.Sound
 snd_thrust		:rl.Sound
+snd_wilhelm		:rl.Sound
 
 Player :: struct {
 	position	:rl.Vector2,
@@ -97,6 +98,8 @@ main :: proc() {
 	defer rl.UnloadSound(snd_explosion1)
 	snd_thrust = rl.LoadSound("resources/thrust.wav")
 	defer rl.UnloadSound(snd_thrust)
+	snd_wilhelm = rl.LoadSound("resources/wilhelm.wav")
+	defer rl.UnloadSound(snd_wilhelm)
 
 	InitGame()
 
@@ -228,7 +231,7 @@ UpdateGame :: proc() {
 				if rl.CheckCollisionPointRec( { player.collider.x, player.collider.y }, { entities[a].position.x, entities[a].position.y, ROB_BRUTE_WIDTH, ROB_BRUTE_HEIGHT}) && entities[a].active do gameOver = true
 			}
 
-			if gameOver do rl.PlaySound(snd_explosion1)
+			if gameOver do rl.PlaySound(snd_wilhelm)
 
 			// move entities towards player
 			for i := 0; i < active_entities; i += 1 {
