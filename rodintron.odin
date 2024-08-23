@@ -6,6 +6,8 @@ import "core:math"
 import rl "vendor:raylib"
 import "core:c"
 
+GOD_MODE			:: true
+
 PLAYER_HEIGHT       :: 45.0
 PLAYER_WIDTH	    :: 20.0
 PLAYER_SPEED		:: 3.0
@@ -14,10 +16,13 @@ SHOTS_MAX			:: 4
 SHOTS_LIFE_SPAN		:: 180
 SHOTS_SPEED			:: 5
 
-
 ROB_BRUTE_WIDTH     :: 30
 ROB_BRUTE_HEIGHT    :: 50
-ROB_BRUTE_SPEED		:: 2
+ROB_BRUTE_SPEED		:: 1
+
+ROB_PATROL_WIDTH	:: 40
+ROB_PATROL_HEIGHT	:: 40
+ROB_PATROL_SPEED	:: 2
 
 screenWidth				:i32: 1200
 screenHeight			:i32: 800
@@ -26,15 +31,16 @@ render_screen_height    :i32 = screenHeight
 rot						:rl.Vector2
 
 MAX_ENTITIES        ::100
-MAX_LEVEL			:: 600
+MAX_wave			:: 600
 STARTING_ENTITIES	:: 5
 
-level				:int = 1
+wave				:int = 1
 entities			:[MAX_ENTITIES]Entity
 active_entities		:int
 destroyed_entities	:int
 score				:int
 
+mpos				:rl.Vector2
 
 render_target       :rl.RenderTexture
 gameOver			:bool
@@ -154,11 +160,10 @@ UpdateGame :: proc() {
             if player.position.y < 0 do player.position.y = 0
 
 			// get mouse position and adjust rotation of 'weapon'
-			mpos := rl.GetMousePosition()
-			hlen := (rl.Vector2) { mpos.x - (player.position.x ), mpos.y - (player.position.y)}
-			rot = math.atan2_f32 (hlen.y, hlen.x)
-			player.rotation = rot.x*rl.RAD2DEG
-			player.rotation += 90
+			mpos := rl.GetMousePosition() / rl.Vector2 { cast(f32)rl.GetScreenWidth(), cast(f32)rl.GetScreenHeight() }
+			hlen := (rl.Vector2) { mpos.x - player.position.x / cast(f32)screenWidth, player.position.y / cast(f32)screenHeight - mpos.y}
+            rot = math.atan2_f32 (hlen.x, hlen.y)
+            player.rotation = rot.x*rl.RAD2DEG
 			
 			// Player shot logic
 			if rl.IsKeyPressed(.SPACE) || rl.IsMouseButtonPressed(.LEFT) {
@@ -256,8 +261,8 @@ UpdateGame :: proc() {
 		 }
 		
 		if destroyed_entities == active_entities {
-			level += 1
-			if level == MAX_LEVEL { victory = true }
+			wave += 1
+			if wave == MAX_wave { victory = true }
 			else {
                 InitGame()
 			}
@@ -266,7 +271,7 @@ UpdateGame :: proc() {
 	} else {
 		if rl.IsKeyPressed(.ENTER)
 		{
-			level = 1
+			wave = 1
 			score = 0
 			InitGame()
 			gameOver = false
@@ -321,7 +326,7 @@ InitGame :: proc() {
 
 		entities[i].position = { f32(posx), f32(posy) }
 		
-		difficulty_multiplier := math.ceil(f32(level) * 0.5)
+		difficulty_multiplier := math.ceil(f32(wave) * 0.5)
 		velx = rl.GetRandomValue(1, ROB_BRUTE_SPEED) * c.int(difficulty_multiplier)
 		vely = rl.GetRandomValue(1, ROB_BRUTE_SPEED) * c.int(difficulty_multiplier)
 
@@ -331,6 +336,6 @@ InitGame :: proc() {
 		entities[i].color = rl.BLUE
 	}
 
-    draw_level_entry()
+    draw_wave_entry()
 
 }
