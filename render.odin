@@ -15,28 +15,22 @@ RenderFrame:: proc() {
 	
 	if !gameOver
 	{
-		// Draw spaceship
-
-		//v1 :rl.Vector2 = { player.position.x + math.sin_f32(player.rotation*rl.DEG2RAD)*(shipHeight), player.position.y - math.cos_f32(player.rotation*rl.DEG2RAD)*(shipHeight) }
-		//v2 :rl.Vector2 = { player.position.x - math.cos_f32(player.rotation*rl.DEG2RAD)*(PLAYER_WIDTH/2), player.position.y - math.sin_f32(player.rotation*rl.DEG2RAD)*(PLAYER_WIDTH/2) }
-		//v3 :rl.Vector2 = { player.position.x + math.cos_f32(player.rotation*rl.DEG2RAD)*(PLAYER_WIDTH/2), player.position.y + math.sin_f32(player.rotation*rl.DEG2RAD)*(PLAYER_WIDTH/2) }
-		
-		//rl.DrawTriangle(v1, v2, v3, rl.MAROON)
+		// Draw player
         rl.DrawRectangle( c.int(player.position.x), c.int(player.position.y), PLAYER_WIDTH, PLAYER_HEIGHT, rl.MAROON)
 
-		// Draw meteors
+		// Draw entities
 		for i:= 0; i < active_entities; i+=1
 		{
-			if entities[i].active do rl.DrawCircleV(entities[i].position, entities[i].radius, rl.DARKGRAY)
-			//if entities[i].active {
-		//		rl.DrawRectanglePro( entities[i].collider,  entities[i].position, 0, entities[i].color)
-		//	}
+			//if entities[i].active do rl.DrawCircleV(entities[i].position, entities[i].radius, rl.DARKGRAY)
+			if entities[i].active {
+				rl.DrawRectangleV( { entities[i].position.x, entities[i].position.y }, {ROB_BRUTE_WIDTH, ROB_BRUTE_HEIGHT }, entities[i].color)
+			}
 		}
 			
-		// Draw shoot
+		// Draw shots
 		for i:= 0; i < SHOTS_MAX; i+=1
 		{
-			if shoot[i].active do rl.DrawCircleV(shoot[i].position, shoot[i].radius, shoot[i].color)
+			if shot[i].active do rl.DrawCircleV(shot[i].position, shot[i].radius, shot[i].color)
 		}
 
 		if victory do rl.DrawText("VICTORY", screenWidth/2 - rl.MeasureText("VICTORY", 20)/2, screenHeight/2, 20, rl.LIGHTGRAY)
@@ -45,7 +39,7 @@ RenderFrame:: proc() {
 
 
 		rl.DrawText( rl.TextFormat("Score %v", score), 10, 10, 20, rl.WHITE)
-
+		
 	} else { rl.DrawText("PRESS [ENTER] TO PLAY AGAIN", screenWidth/2 - rl.MeasureText("PRESS [ENTER] TO PLAY AGAIN", 20)/2, screenHeight/2, 20, rl.GRAY) }
 
 	rl.EndTextureMode()

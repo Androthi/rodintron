@@ -35,6 +35,7 @@ level				:int = 1
 entities			:[MAX_ENTITIES]Entity
 active_entities		:int
 destroyed_entities	:int
+score				:int
 
 
 render_target       :rl.RenderTexture
@@ -43,8 +44,7 @@ pause				:bool
 victory				:bool
 
 player		:Player
-shoot		:[SHOTS_MAX]Shoot
-score		:int
+shot		:[SHOTS_MAX]Player_Shot
 
 snd_lazer1		:rl.Sound
 snd_explosion1	:rl.Sound
@@ -59,7 +59,7 @@ Player :: struct {
 	color		:rl.Color,
 }
 
-Shoot :: struct {
+Player_Shot :: struct {
 	position	:rl.Vector2,
 	speed		:rl.Vector2,
 	radius		:f32,
@@ -115,6 +115,19 @@ main :: proc() {
 // Update game (one frame)
 UpdateGame :: proc() {
 
+	change_entity_direction :: proc(entity: ^Entity){
+		
+		velx, vely :c.int
+		for {
+			velx = rl.GetRandomValue(-ROB_BRUTE_SPEED, ROB_BRUTE_SPEED)
+			vely = rl.GetRandomValue(-ROB_BRUTE_SPEED, ROB_BRUTE_SPEED)
+			if velx == 0 && vely == 0 do continue
+			break
+		}
+
+		entity.speed = { f32(velx), f32(vely) }
+	}
+	
 	if !gameOver {
 
 		if rl.IsKeyPressed(.P) do pause = !pause
@@ -127,6 +140,10 @@ UpdateGame :: proc() {
 			if rl.IsKeyDown(.LEFT) do player.rotation -= 5
 			if rl.IsKeyDown(.RIGHT) do player.rotation += 5
 			
+			// not strictly necessary
+			if player.rotation > 360 do player.rotation = 0
+			if player.rotation < 0 do player.rotation = 360
+
 			// Player logic: velocity
             if rl.IsKeyDown(.W) do player.position.y -= 2*PLAYER_SPEED
             if rl.IsKeyDown(.S) do player.position.y += 2*PLAYER_SPEED
@@ -141,107 +158,103 @@ UpdateGame :: proc() {
             if player.position.y + PLAYER_HEIGHT > f32(screenHeight) do player.position.y = f32(screenHeight) - PLAYER_HEIGHT
             if player.position.y < 0 do player.position.y = 0
 
-			// Player shoot logic
+			// Player shot logic
 			if rl.IsKeyPressed(.SPACE)
 			{
                 for i:= 0; i < SHOTS_MAX; i+=1
 				{
-                    if !shoot[i].active
+                    if !shot[i].active
 					{
                         rl.PlaySound(snd_lazer1)
-						shoot[i].position = (rl.Vector2){ player.position.x + math.sin(player.rotation*rl.DEG2RAD)*(PLAYER_HEIGHT), player.position.y - math.cos(player.rotation*rl.DEG2RAD)*(PLAYER_HEIGHT) }
-						shoot[i].active = true
-						shoot[i].speed.x = 1.5*math.sin(player.rotation*rl.DEG2RAD)*SHOTS_SPEED
-						shoot[i].speed.y = 1.5*math.cos(player.rotation*rl.DEG2RAD)*SHOTS_SPEED
-						shoot[i].rotation = player.rotation
+						shot[i].position = (rl.Vector2){ player.position.x + math.sin(player.rotation*rl.DEG2RAD)*(PLAYER_HEIGHT), player.position.y - math.cos(player.rotation*rl.DEG2RAD)*(PLAYER_HEIGHT) }
+						shot[i].active = true
+						shot[i].speed.x = 1.5*math.sin(player.rotation*rl.DEG2RAD)*SHOTS_SPEED
+						shot[i].speed.y = 1.5*math.cos(player.rotation*rl.DEG2RAD)*SHOTS_SPEED
+						shot[i].rotation = player.rotation
 						break
 					}
 				}
 			}
 			
-			// Shoot life timer
+			// shot life timer
 			for i:= 0; i < SHOTS_MAX; i+=1 {
-				if shoot[i].active do shoot[i].life_span+=1
+				if shot[i].active do shot[i].life_span+=1
 			}
 				
 				
 			// Shot logic
 			for i:= 0; i < SHOTS_MAX; i+=1 {
-				if shoot[i].active {
+				if shot[i].active {
 					
 					// Movement
-					shoot[i].position.x += shoot[i].speed.x
-					shoot[i].position.y -= shoot[i].speed.y
+					shot[i].position.x += shot[i].speed.x
+					shot[i].position.y -= shot[i].speed.y
 
-					// Collision logic: shoot vs walls
-					if shoot[i].position.x > f32(screenWidth) + shoot[i].radius {
-						shoot[i].active = false
-						shoot[i].life_span = 0
+					// Collision logic: shot vs walls
+					if shot[i].position.x > f32(screenWidth) + shot[i].radius {
+						shot[i].active = false
+						shot[i].life_span = 0
 					}
-					else if shoot[i].position.x < 0 - shoot[i].radius {
-						shoot[i].active = false
-						shoot[i].life_span = 0
+					else if shot[i].position.x < 0 - shot[i].radius {
+						shot[i].active = false
+						shot[i].life_span = 0
 					}
-					if shoot[i].position.y > f32(screenHeight) + shoot[i].radius {
-						shoot[i].active = false
-						shoot[i].life_span = 0
+					if shot[i].position.y > f32(screenHeight) + shot[i].radius {
+						shot[i].active = false
+						shot[i].life_span = 0
 					}
-					else if shoot[i].position.y < 0 - shoot[i].radius {
-						shoot[i].active = false
-						shoot[i].life_span = 0
+					else if shot[i].position.y < 0 - shot[i].radius {
+						shot[i].active = false
+						shot[i].life_span = 0
 					}
 
-					// Life of shoot
-					if shoot[i].life_span >= SHOTS_LIFE_SPAN {
-						shoot[i].position = (rl.Vector2){0, 0}
-						shoot[i].speed = (rl.Vector2){0, 0}
-						shoot[i].life_span = 0
-						shoot[i].active = false
+					// Life of shot
+					if shot[i].life_span >= SHOTS_LIFE_SPAN {
+						shot[i].position = (rl.Vector2){0, 0}
+						shot[i].speed = (rl.Vector2){0, 0}
+						shot[i].life_span = 0
+						shot[i].active = false
 					}
 				}
 			}
 
 			// Collision logic: player vs robots
-			player.collider = (rl.Vector3){player.position.x + math.sin(player.rotation*rl.DEG2RAD)*(PLAYER_HEIGHT/2.5), player.position.y - math.cos(player.rotation*rl.DEG2RAD)*(PLAYER_HEIGHT/2.5), 12}
+			player.collider = (rl.Vector3){ player.position.x + PLAYER_WIDTH/2, player.position.y + PLAYER_HEIGHT/2, PLAYER_WIDTH/2 }
 
 			for a := 0; a < active_entities; a += 1 {
-				if rl.CheckCollisionCircles((rl.Vector2){player.collider.x, player.collider.y}, player.collider.z, entities[a].position, entities[a].radius) && entities[a].active do gameOver = true
+				if rl.CheckCollisionPointRec( { player.collider.x, player.collider.y }, { entities[a].position.x, entities[a].position.y, ROB_BRUTE_WIDTH, ROB_BRUTE_HEIGHT}) && entities[a].active do gameOver = true
 			}
 
 			if gameOver do rl.PlaySound(snd_explosion1)
 
 			for i := 0; i < active_entities; i += 1 {
 				
+				// move entities
 				if entities[i].active {
-
-					// move entity
 					entities[i].position.x += entities[i].speed.x
 					entities[i].position.y += entities[i].speed.y
 				}
 
-				if entities[i].position.x > f32(screenWidth) + entities[i].radius do entities[i].position.x = -(entities[i].radius)
-				else if entities[i].position.x < 0 - entities[i].radius do entities[i].position.x = f32(screenWidth) + entities[i].radius
-				if entities[i].position.y > f32(screenHeight) + entities[i].radius do entities[i].position.y = -(entities[i].radius)
-				else if entities[i].position.y < 0 - entities[i].radius do entities[i].position.y = f32(screenHeight) + entities[i].radius		
-				
-				// if entities[i].position.x + ROB_BRUTE_WIDTH > f32(screenWidth) do entities[i].position.x =  f32(screenWidth) - ROB_BRUTE_WIDTH
-				// else if entities[i].position.x < 0 do entities[i].position.x = 0 
-				// if entities[i].position.y + ROB_BRUTE_HEIGHT > f32(screenHeight) do entities[i].position.y = f32(screenHeight) - ROB_BRUTE_HEIGHT
-				// else if entities[i].position.y < 0 do entities[i].position.y = 0
-				// Collision logic: meteor vs wall
+				// check entity collision with game boundaries
+				// just bounce for now, we want these to be chancing the player down .. note some entities can escape with this code.
+				// but it's a tempt thing.
+				if entities[i].position.x + ROB_BRUTE_WIDTH > f32(screenWidth) do change_entity_direction(&entities[i])
+				if entities[i].position.x < 0 do change_entity_direction(&entities[i])
+				if entities[i].position.y + ROB_BRUTE_HEIGHT > f32(screenHeight) do change_entity_direction(&entities[i])
+				if entities[i].position.y < 0 do change_entity_direction(&entities[i])
 				
 			}
 
-			// Collision logic: player-shoots vs robots
+			// Collision logic: player-shots vs robots
 			for i := 0; i < SHOTS_MAX; i += 1 {
-				if shoot[i].active {
+				if shot[i].active {
 					for a := 0; a < active_entities; a += 1 {
-						if entities[a].active && rl.CheckCollisionCircles(shoot[i].position, shoot[i].radius, entities[a].position, entities[a].radius)
-						{
+						//if entities[a].active && rl.CheckCollisionCircles(shot[i].position, shot[i].radius, entities[a].position, entities[a].radius)
+						if entities[a].active && rl.CheckCollisionCircleRec(shot[i].position, shot[i].radius, { entities[a].position.x, entities[a].position.y, ROB_BRUTE_WIDTH, ROB_BRUTE_HEIGHT} ) {
 							rl.PlaySound(snd_explosion1)
 							score += 10
-							shoot[i].active = false
-							shoot[i].life_span = 0
+							shot[i].active = false
+							shot[i].life_span = 0
 							entities[a].active = false
 							destroyed_entities +=1
 						}
@@ -280,21 +293,21 @@ InitGame :: proc() {
 	// Initialization player
     player.position = (rl.Vector2){ f32(screenWidth/2), f32(screenHeight/2) - PLAYER_HEIGHT/2}
 	player.rotation = 0
-	player.collider = (rl.Vector3){player.position.x + PLAYER_HEIGHT/2, player.position.y - PLAYER_HEIGHT/2, 0}
+	player.collider = (rl.Vector3){player.position.x + PLAYER_WIDTH/2, player.position.y + PLAYER_HEIGHT/2, 0}
     player.color = rl.MAROON
 
     destroyed_entities = 0
 	active_entities = STARTING_ENTITIES
 	
-	// Initialization shoot
+	// Initialization shot
 	for i := 0; i < SHOTS_MAX; i+=1
 	{
-		shoot[i].position = (rl.Vector2){0, 0}
-		shoot[i].speed = (rl.Vector2){0, 0}
-		shoot[i].radius = 4
-		shoot[i].active = false
-		shoot[i].life_span = 0
-		shoot[i].color = rl.YELLOW
+		shot[i].position = (rl.Vector2){0, 0}
+		shot[i].speed = (rl.Vector2){0, 0}
+		shot[i].radius = 4
+		shot[i].active = false
+		shot[i].life_span = 0
+		shot[i].color = rl.YELLOW
 	}
 
 	for i := 0; i < STARTING_ENTITIES; i += 1 {
