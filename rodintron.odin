@@ -34,12 +34,16 @@ screenHeight			:i32: 800
 render_screen_width     :i32 = screenWidth
 render_screen_height    :i32 = screenHeight
 
-MAX_ENTITIES        :: 100
-MAX_wave			:: 95		//assuming +1 entity/wave
+MAX_WAVE			:: 95		//assuming +1 entity/wave
 STARTING_ENTITIES	:: 5
-wave				:int = 1
+NUM_CIVILIANS		:: 5
+MAX_ENTITIES        :: MAX_WAVE + STARTING_ENTITIES + NUM_CIVILIANS
 entities			:[MAX_ENTITIES]Entity
+
+wave				:int = 1
+
 active_entities		:int
+active_civs			:int
 destroyed_entities	:int
 score				:int
 
@@ -76,8 +80,9 @@ Player_Shot :: struct {
 
 Entity :: struct {
     type		:Entity_Type,
-	position    :rl.Vector2, //? we can get rid of this and justa use the collider.x and collider.y positions
+	position    :rl.Vector2, 	//? we can get rid of this and just use the collider.x and collider.y positions
     speed       :rl.Vector2,
+	direction	:[2]f32,		// use this for movement directions for robots that don't follow player format [+/-1, +/-1]
 	shape		:[2]f32,
 	collider	:rl.Rectangle,	// temporary collider + drawing shape
     color       :rl.Color,		// temp for shape. will be replaced by sprite colors.
@@ -86,10 +91,14 @@ Entity :: struct {
 }
 
 Entity_Type :: enum {
-	BRUTE, PATROL, SENTRY,
+	CIVILIAN, BRUTE, PATROL, SENTRY,
 }
+Entity_Speeds		:[]f32 = { PLAYER_SPEED, ROB_BRUTE_SPEED, ROB_PATROL_SPEED, ROB_SENTRY_SPEED }
 
-Entity_Speeds :[]f32 = { ROB_BRUTE_SPEED, ROB_PATROL_SPEED, ROB_SENTRY_SPEED }
+Random_Direction :: enum {
+	UP, DOWN, LEFT, RIGHT
+}
+directions			:[4][2]f32 = { { 0.0, -1.0 }, { 0.0, 1.0 }, { -1.0, 0.0 }, { 1.0, 0.0 } }
 
 main :: proc() {
 
@@ -130,18 +139,6 @@ main :: proc() {
 // Update game (one frame)
 UpdateGame :: proc() {
 
-	change_entity_direction :: proc(entity: ^Entity){
-		
-		velx, vely :c.int
-		for {
-			velx = rl.GetRandomValue(-ROB_BRUTE_SPEED, ROB_BRUTE_SPEED)
-			vely = rl.GetRandomValue(-ROB_BRUTE_SPEED, ROB_BRUTE_SPEED)
-			if velx == 0 && vely == 0 do continue
-			break
-		}
-
-		entity.speed = { f32(velx), f32(vely) }
-	}
 	
 	if !gameOver {
 
@@ -156,7 +153,7 @@ UpdateGame :: proc() {
 			//? not strictly necessary
 			if player.rotation > 360 do player.rotation = 0
 			if player.rotation < 0 do player.rotation = 360
-
+			
 			// Player logic: velocity
             if rl.IsKeyDown(.W) do player.position.y -= 2*PLAYER_SPEED
             if rl.IsKeyDown(.S) do player.position.y += 2*PLAYER_SPEED
@@ -165,18 +162,20 @@ UpdateGame :: proc() {
 
 			// Collision logic: player vs walls
             // walls are invisible, movement limiter. player must stay in the "game world"
-
+			
             if player.position.x + PLAYER_WIDTH > f32(screenWidth) do player.position.x = f32(screenWidth) - PLAYER_WIDTH
 			if player.position.x < 0 do player.position.x = 0
             if player.position.y + PLAYER_HEIGHT > f32(screenHeight) do player.position.y = f32(screenHeight) - PLAYER_HEIGHT
             if player.position.y < 0 do player.position.y = 0
-
+			
 			// get mouse position and adjust rotation of 'weapon'
 			mpos := rl.GetMousePosition() / rl.Vector2 { cast(f32)rl.GetScreenWidth(), cast(f32)rl.GetScreenHeight() }
 			hlen := (rl.Vector2) { mpos.x - player.position.x / cast(f32)screenWidth, player.position.y / cast(f32)screenHeight - mpos.y}
             rot := math.atan2_f32 (hlen.x, hlen.y)
             player.rotation = rot*rl.RAD2DEG
 			
+			
+			// TODO add robot shot logic
 			// Player shot logic
 			if rl.IsKeyPressed(.SPACE) || rl.IsMouseButtonPressed(.LEFT) {
                 for i:= 0; i < SHOTS_MAX; i+=1 {
@@ -191,12 +190,12 @@ UpdateGame :: proc() {
 					}
 				}
 			}
-			
+
 			// shot life timer
 			for i:= 0; i < SHOTS_MAX; i+=1 {
 				if shot[i].active do shot[i].life_span+=1
 			}
-				
+						
 			// Shot logic
 			for i:= 0; i < SHOTS_MAX; i+=1 {
 				if shot[i].active {
@@ -204,7 +203,7 @@ UpdateGame :: proc() {
 					// Movement
 					shot[i].position.x += shot[i].speed.x
 					shot[i].position.y -= shot[i].speed.y
-
+					
 					// Collision logic: shot vs walls
 					if shot[i].position.x > f32(screenWidth) + shot[i].radius {
 						shot[i].active = false
@@ -222,7 +221,7 @@ UpdateGame :: proc() {
 						shot[i].active = false
 						shot[i].life_span = 0
 					}
-
+					
 					// Life of shot
 					if shot[i].life_span >= SHOTS_LIFE_SPAN {
 						shot[i].position = (rl.Vector2){0, 0}
@@ -236,25 +235,50 @@ UpdateGame :: proc() {
 			// Collision logic: player vs robots
 			player.collider = (rl.Vector3){ player.position.x + PLAYER_WIDTH/2, player.position.y + PLAYER_HEIGHT/2, PLAYER_WIDTH/2 }
 
-			for a := 0; a < active_entities; a += 1 {
-				if rl.CheckCollisionPointRec( { player.collider.x, player.collider.y }, { entities[a].position.x, entities[a].position.y, ROB_BRUTE_WIDTH, ROB_BRUTE_HEIGHT}) && entities[a].active do gameOver = true
+			for a := 0; a < active_entities + active_civs; a += 1 {
+				if rl.CheckCollisionPointRec( { player.collider.x, player.collider.y }, { entities[a].position.x, entities[a].position.y, entities[a].shape.x, entities[a].shape.y}) && entities[a].active {
+					if entities[a].type == .CIVILIAN {
+						score += 1000
+						entities[a].active = false
+						active_civs -= 1
+					} else do gameOver = true
+				}
 			}
 
 			if gameOver do rl.PlaySound(snd_wilhelm)
 
-			// move entities towards player
-			for i := 0; i < active_entities; i += 1 {
+			// move entities
+			for i := 0; i < active_entities + active_civs; i += 1 {
 				
 				if entities[i].active {
-					if entities[i].position.x < player.position.x do entities[i].position.x += entities[i].speed.x
-					else do entities[i].position.x -= entities[i].speed.x
-					if entities[i].position.y < player.position.y do entities[i].position.y += entities[i].speed.y
-					else do entities[i].position.y -= entities[i].speed.y
+					if entities[i].type == .BRUTE {
+						if entities[i].position.x < player.position.x do entities[i].position.x += entities[i].speed.x
+						else do entities[i].position.x -= entities[i].speed.x
+						if entities[i].position.y < player.position.y do entities[i].position.y += entities[i].speed.y
+						else do entities[i].position.y -= entities[i].speed.y
+					} else if entities[i].type == .PATROL || entities[i].type == .CIVILIAN {
+						patrol_move(&entities[i])
+						entities[i].position.x += entities[i].direction.x*entities[i].speed.x
+						entities[i].position.y += entities[i].direction.y*entities[i].speed.y
+					}
 
+					// decay civlian hit points
+					if entities[i].type == .CIVILIAN {
+						decay := rand.float32_range(0.0, 1_000_000)
+						if decay < 10_000 {
+							entities[i].hits -= 1
+							if entities[i].hits == 0 {
+								active_civs -= 1
+								score -= 1000
+								rl.PlaySound(snd_wilhelm)
+								entities[i].active = false
+							}
+						}
+					}
 				}
-
 			}
 
+			
 			// Collision logic: player-shots vs robots
 			for i := 0; i < SHOTS_MAX; i += 1 {
 				if shot[i].active {
@@ -279,7 +303,7 @@ UpdateGame :: proc() {
 		
 		if destroyed_entities == active_entities {
 			wave += 1
-			if wave == MAX_wave { victory = true }
+			if wave == MAX_WAVE { victory = true }
 			else {
                 InitGame()
 			}
@@ -293,6 +317,24 @@ UpdateGame :: proc() {
 			InitGame()
 			gameOver = false
 		}
+	}
+}
+
+patrol_move :: proc( entity: ^Entity) {
+	// entity must be active if this proc is called
+	
+	if entity.position.x <= entity.shape.x do entity.direction = directions[Random_Direction.RIGHT]
+	if entity.position.x >= f32(screenWidth) - entity.shape.x do entity.direction = directions[Random_Direction.LEFT]
+	if entity.position.y <= 0 do entity.direction = directions[Random_Direction.DOWN]
+	if entity.position.y >= f32(screenHeight) - entity.shape.y{
+		entity.direction = directions[Random_Direction.UP]
+		entity.position.y = f32(screenHeight) - entity.shape.y
+	}
+
+	change_dir := rand.float32_range(0.0, 1_000_000)
+	if change_dir < 10_000 {
+		dir := rand.choice_enum(Random_Direction)
+		entity.direction = directions[dir]
 	}
 }
 
@@ -313,6 +355,7 @@ InitGame :: proc() {
 
     destroyed_entities = 0
 	active_entities = wave + STARTING_ENTITIES -1  // +1 entity/level
+	active_civs = NUM_CIVILIANS
 	
 	// Initialization shot
 	for i := 0; i < SHOTS_MAX; i+=1
@@ -340,33 +383,64 @@ InitGame :: proc() {
 				posy = rl.GetRandomValue(0, screenHeight)
 			} else do break
 		}
+
 		entities[i].position = { f32(posx), f32(posy) }
 
 		entity_type := rand.choice_enum(Entity_Type)
+		if entity_type == .CIVILIAN do entity_type += Entity_Type(1)
 		entities[i].type = entity_type
 
 		velocity := Entity_Speeds[entity_type]
 		entities[i].speed = { velocity, velocity  }
 
 		entity_shape :[2]f32
-		switch entity_type {
+		#partial switch entity_type {
 			case .BRUTE:
 				entity_shape.x = ROB_BRUTE_WIDTH
 				entity_shape.y = ROB_BRUTE_HEIGHT
 				entities[i].hits = 1
+				entities[i].color = rl.BLUE
 			case .PATROL:
 				entity_shape.x = ROB_PATROL_WIDTH
 				entity_shape.y = ROB_PATROL_HEIGHT
 				entities[i].hits = 2
+				entities[i].color = rl.ORANGE
+				dir := rand.choice_enum( Random_Direction)
+				entities[i].direction = directions[dir]
 			case .SENTRY:
 				entity_shape.x = ROB_SENTRY_WIDTH
 				entity_shape.y = ROB_SENTRY_HEIGHT
 				entities[i].hits = 5
+				entities[i].color = rl.PURPLE
 		}
-
+		entities[i].shape = entity_shape
 		entities[i].collider = (rl.Rectangle){ f32(posx), f32(posy), entity_shape.x, entity_shape.y }
 		entities[i].active = true
-		entities[i].color = rl.BLUE
+
+		// fix position to make sure none of them are off the screen
+		if entities[i].position.x <= entities[i].shape.x do entities[i].position.x = 0
+		if entities[i].position.x >= f32(screenWidth) + entities[i].shape.x do entities[i].position.x = f32(screenWidth)-entities[i].shape.x
+		if entities[i].position.y <= 0 - entities[i].shape.y do entities[i].position.y = 0
+		if entities[i].position.y >= f32(screenHeight) - entities[i].shape.y do entities[i].position.y = f32(screenHeight)-entities[i].shape.y
+	
+	}
+
+	ary := active_entities
+	civs := 0
+	for {
+		posx := rl.GetRandomValue(0, screenWidth - (PLAYER_WIDTH*2))
+		posy := rl.GetRandomValue(0, screenHeight - (PLAYER_HEIGHT*2))
+		entities[active_entities+civs].position = { f32(posx), f32(posy) }
+		entities[active_entities+civs].type = .CIVILIAN
+		entities[active_entities+civs].hits = 50
+		entities[active_entities+civs].active = true
+		entities[active_entities+civs].shape = {PLAYER_WIDTH, PLAYER_HEIGHT}
+		entities[active_entities+civs].speed = PLAYER_SPEED
+		entities[active_entities+civs].color = rl.GREEN
+		dir := rand.choice_enum(Random_Direction)
+		entities[active_entities+civs].direction = directions[dir]
+		civs +=1
+		if civs >= active_civs do break
 	}
 
     draw_wave_entry()

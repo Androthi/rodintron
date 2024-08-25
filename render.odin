@@ -26,13 +26,13 @@ RenderFrame:: proc() {
 		rl.DrawLineEx( stick, stick+5, 5, rl.BROWN)
 
 		// Draw entities
-		for i:= 0; i < active_entities; i+=1
+		for i:= 0; i < active_entities+active_civs; i+=1
 		{
 			if entities[i].active {
-				rl.DrawRectangleV( { entities[i].position.x, entities[i].position.y }, {ROB_BRUTE_WIDTH, ROB_BRUTE_HEIGHT }, entities[i].color)
+				rl.DrawRectangleV( { entities[i].position.x, entities[i].position.y }, {entities[i].shape.x, entities[i].shape.y }, entities[i].color)
 			}
 		}
-			
+		
 		// Draw shots
 		for i:= 0; i < SHOTS_MAX; i+=1
 		{
