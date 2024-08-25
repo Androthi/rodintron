@@ -5,6 +5,7 @@ package rodintron
 import "core:math"
 import rl "vendor:raylib"
 import "core:c"
+import "core:math/rand"
 
 GOD_MODE			:: false
 
@@ -18,47 +19,46 @@ SHOTS_SPEED			:: 5
 
 ROB_BRUTE_WIDTH     :: 30
 ROB_BRUTE_HEIGHT    :: 50
-ROB_BRUTE_SPEED		:: 1
+ROB_BRUTE_SPEED		:: 2
 
 ROB_PATROL_WIDTH	:: 40
 ROB_PATROL_HEIGHT	:: 40
-ROB_PATROL_SPEED	:: 2
+ROB_PATROL_SPEED	:: 1
+
+ROB_SENTRY_WIDTH	:: 30
+ROB_SENTRY_HEIGHT	:: 30
+ROB_SENTRY_SPEED	:: 0
 
 screenWidth				:i32: 1200
 screenHeight			:i32: 800
 render_screen_width     :i32 = screenWidth
 render_screen_height    :i32 = screenHeight
-rot						:rl.Vector2
 
-MAX_ENTITIES        ::100
-MAX_wave			:: 600
+MAX_ENTITIES        :: 100
+MAX_wave			:: 95		//assuming +1 entity/wave
 STARTING_ENTITIES	:: 5
-
 wave				:int = 1
 entities			:[MAX_ENTITIES]Entity
 active_entities		:int
 destroyed_entities	:int
 score				:int
 
-mpos				:rl.Vector2
-
 render_target       :rl.RenderTexture
 gameOver			:bool
 pause				:bool
 victory				:bool
 
-player		:Player
-shot		:[SHOTS_MAX]Player_Shot
+player				:Player
+shot				:[SHOTS_MAX]Player_Shot
 
-snd_lazer1		:rl.Sound
-snd_explosion1	:rl.Sound
-snd_thrust		:rl.Sound
-snd_wilhelm		:rl.Sound
+snd_lazer1			:rl.Sound
+snd_explosion1		:rl.Sound
+snd_thrust			:rl.Sound
+snd_wilhelm			:rl.Sound
 
 Player :: struct {
 	position	:rl.Vector2,
 	speed		:rl.Vector2,
-	acceleration:f32,
 	rotation	:f32,
 	collider	:rl.Vector3,
 	color		:rl.Color,
@@ -75,12 +75,21 @@ Player_Shot :: struct {
 }
 
 Entity :: struct {
-    position    :rl.Vector2, //? we can get rid of this and justa use the collider.x and collider.y positions
+    type		:Entity_Type,
+	position    :rl.Vector2, //? we can get rid of this and justa use the collider.x and collider.y positions
     speed       :rl.Vector2,
+	shape		:[2]f32,
 	collider	:rl.Rectangle,	// temporary collider + drawing shape
     color       :rl.Color,		// temp for shape. will be replaced by sprite colors.
+	hits		:u8,
     active      :bool,
 }
+
+Entity_Type :: enum {
+	BRUTE, PATROL, SENTRY,
+}
+
+Entity_Speeds :[]f32 = { ROB_BRUTE_SPEED, ROB_PATROL_SPEED, ROB_SENTRY_SPEED }
 
 main :: proc() {
 
@@ -165,8 +174,8 @@ UpdateGame :: proc() {
 			// get mouse position and adjust rotation of 'weapon'
 			mpos := rl.GetMousePosition() / rl.Vector2 { cast(f32)rl.GetScreenWidth(), cast(f32)rl.GetScreenHeight() }
 			hlen := (rl.Vector2) { mpos.x - player.position.x / cast(f32)screenWidth, player.position.y / cast(f32)screenHeight - mpos.y}
-            rot = math.atan2_f32 (hlen.x, hlen.y)
-            player.rotation = rot.x*rl.RAD2DEG
+            rot := math.atan2_f32 (hlen.x, hlen.y)
+            player.rotation = rot*rl.RAD2DEG
 			
 			// Player shot logic
 			if rl.IsKeyPressed(.SPACE) || rl.IsMouseButtonPressed(.LEFT) {
@@ -251,12 +260,17 @@ UpdateGame :: proc() {
 				if shot[i].active {
 					for a := 0; a < active_entities; a += 1 {
 						if entities[a].active && rl.CheckCollisionCircleRec(shot[i].position, shot[i].radius, { entities[a].position.x, entities[a].position.y, ROB_BRUTE_WIDTH, ROB_BRUTE_HEIGHT} ) {
-							rl.PlaySound(snd_explosion1)
-							score += 10
+							
+							entities[a].hits -= 1
+							if entities[a].hits == 0 {
+								rl.PlaySound(snd_explosion1)
+								score += (int(entities[a].type)+1) * 10
+								entities[a].active = false
+								destroyed_entities +=1
+							}
+							
 							shot[i].active = false
 							shot[i].life_span = 0
-							entities[a].active = false
-							destroyed_entities +=1
 						}
 					}
 				}
@@ -298,7 +312,7 @@ InitGame :: proc() {
     player.color = rl.MAROON
 
     destroyed_entities = 0
-	active_entities = STARTING_ENTITIES
+	active_entities = wave + STARTING_ENTITIES -1  // +1 entity/level
 	
 	// Initialization shot
 	for i := 0; i < SHOTS_MAX; i+=1
@@ -311,7 +325,7 @@ InitGame :: proc() {
 		shot[i].color = rl.YELLOW
 	}
 
-	for i := 0; i < STARTING_ENTITIES; i += 1 {
+	for i := 0; i < active_entities; i += 1 {
 		
 		// spawn entities, should be at least 150px away from player (who starts in center of screen)
 		for {
@@ -326,15 +340,31 @@ InitGame :: proc() {
 				posy = rl.GetRandomValue(0, screenHeight)
 			} else do break
 		}
-
 		entities[i].position = { f32(posx), f32(posy) }
-		
-		difficulty_multiplier := math.ceil(f32(wave) * 0.5)
-		velx = rl.GetRandomValue(1, ROB_BRUTE_SPEED) * c.int(difficulty_multiplier)
-		vely = rl.GetRandomValue(1, ROB_BRUTE_SPEED) * c.int(difficulty_multiplier)
 
-		entities[i].speed = { f32(velx), f32(vely) }
-		entities[i].collider = (rl.Rectangle){ f32(posx), f32(posy), ROB_BRUTE_WIDTH, ROB_BRUTE_HEIGHT }
+		entity_type := rand.choice_enum(Entity_Type)
+		entities[i].type = entity_type
+
+		velocity := Entity_Speeds[entity_type]
+		entities[i].speed = { velocity, velocity  }
+
+		entity_shape :[2]f32
+		switch entity_type {
+			case .BRUTE:
+				entity_shape.x = ROB_BRUTE_WIDTH
+				entity_shape.y = ROB_BRUTE_HEIGHT
+				entities[i].hits = 1
+			case .PATROL:
+				entity_shape.x = ROB_PATROL_WIDTH
+				entity_shape.y = ROB_PATROL_HEIGHT
+				entities[i].hits = 2
+			case .SENTRY:
+				entity_shape.x = ROB_SENTRY_WIDTH
+				entity_shape.y = ROB_SENTRY_HEIGHT
+				entities[i].hits = 5
+		}
+
+		entities[i].collider = (rl.Rectangle){ f32(posx), f32(posy), entity_shape.x, entity_shape.y }
 		entities[i].active = true
 		entities[i].color = rl.BLUE
 	}

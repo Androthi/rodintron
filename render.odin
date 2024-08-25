@@ -44,8 +44,7 @@ RenderFrame:: proc() {
 		if pause do rl.DrawText("GAME PAUSED", screenWidth/2 - rl.MeasureText("GAME PAUSED", 40)/2, screenHeight/2 - 40, 40, rl.GRAY)
 
 		rl.DrawText( rl.TextFormat("Score %v", score), 10, 10, 20, rl.WHITE)
-		rl.DrawText( rl.TextFormat("Prot %v", player.rotation), 10, 40, 20, rl.WHITE)
-		rl.DrawText( rl.TextFormat("Prot %v", mpos), 10, 70, 20, rl.WHITE)
+		rl.DrawText( rl.TextFormat("Wave  %v", wave), 10, 40, 20, rl.WHITE)
 
 		
 	} else { rl.DrawText("PRESS [ENTER] TO PLAY AGAIN", screenWidth/2 - rl.MeasureText("PRESS [ENTER] TO PLAY AGAIN", 20)/2, screenHeight/2, 20, rl.GRAY) }
@@ -79,8 +78,8 @@ draw_wave_entry :: proc() {
         
         rl.BeginDrawing()
         rl.ClearBackground(rl.BLACK)
-        w_pos +=20; if w_pos > width do w_pos = width
-        h_pos +=20; if h_pos > height do h_pos = height
+        w_pos +=40; if w_pos > width do w_pos = width
+        h_pos +=40; if h_pos > height do h_pos = height
         if w_pos == width && h_pos == height do break
         rl.DrawRectangleLinesEx( {f32(width/2 - w_pos/2), f32(height/2 - h_pos/2), f32(w_pos), f32(h_pos)},
                                     40.0,
