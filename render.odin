@@ -21,12 +21,11 @@ RenderFrame:: proc() {
 		// Draw player
         rl.DrawRectangle( c.int(player.position.x), c.int(player.position.y), PLAYER_WIDTH, PLAYER_HEIGHT, rl.MAROON)
 
-		//TODO > Draw 'weapon'
 		stick := (rl.Vector2){ (player.position.x + math.sin(player.rotation*rl.DEG2RAD)*(PLAYER_HEIGHT)), player.position.y - math.cos(player.rotation*rl.DEG2RAD)*(PLAYER_HEIGHT) }
-		rl.DrawLineEx( stick, stick+5, 5, rl.BROWN)
+		rl.DrawLineEx( stick, stick+10, 5, rl.BROWN)
 
 		// Draw entities
-		for i:= 0; i < active_entities+active_civs; i+=1
+		for i:= 0; i < active_entities + NUM_CIVILIANS; i+=1
 		{
 			if entities[i].active {
 				rl.DrawRectangleV( { entities[i].position.x, entities[i].position.y }, {entities[i].shape.x, entities[i].shape.y }, entities[i].color)
@@ -34,7 +33,7 @@ RenderFrame:: proc() {
 		}
 		
 		// Draw shots
-		for i:= 0; i < SHOTS_MAX; i+=1
+		for i:= 0; i < len(shot); i+=1
 		{
 			if shot[i].active do rl.DrawCircleV(shot[i].position, shot[i].radius, shot[i].color)
 		}
