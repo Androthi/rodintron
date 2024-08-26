@@ -210,7 +210,6 @@ UpdateGame :: proc() {
 									shot[j].position = {entities[i].position.x + entities[i].shape.x/2, entities[i].position.y + entities[i].shape.y/2}
 									shot[j].active = true
 									shot[j].type = entities[i].type
-
 									hlen := (rl.Vector2) { player.position.x - entities[i].position.x, entities[i].position.y - player.position.y}
 									rot := math.atan2_f32 (hlen.x, hlen.y)
 									shot[j].rotation = rot*rl.RAD2DEG
