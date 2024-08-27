@@ -4,4 +4,9 @@ Robotron style game written in Odin
 
 This is WIP
 
-Currently the screen shows only moving rectangles.
+Current state is a playable game that uses rectangles for graphics.
+
+## Updates
+
+08/26/24
+    changed collision rects, code refactoring to make it more usuable for other games

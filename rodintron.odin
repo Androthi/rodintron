@@ -63,9 +63,8 @@ snd_wilhelm			:rl.Sound
 
 Player :: struct {
 	position	:rl.Vector2,
-	speed		:rl.Vector2,
 	rotation	:f32,
-	collider	:rl.Vector3,
+	collider	:rl.Rectangle,
 	color		:rl.Color,
 }
 
@@ -83,8 +82,8 @@ Entity :: struct {
     type		:Entity_Type,
 	position    :rl.Vector2, 	//? we can get rid of this and just use the collider.x and collider.y positions
     speed       :rl.Vector2,
-	direction	:[2]f32,		// use this for movement directions for robots that don't follow player format [+/-1, +/-1]
-	shape		:[2]f32,
+	direction	:rl.Vector2,		// use this for movement directions for robots that don't follow player format [+/-1, +/-1]
+	shape		:rl.Vector2,
 	collider	:rl.Rectangle,	// temporary collider + drawing shape
     color       :rl.Color,		// temp for shape. will be replaced by sprite colors.
 	hits		:u8,
@@ -100,6 +99,9 @@ Random_Direction :: enum {
 	UP, DOWN, LEFT, RIGHT
 }
 directions			:[4][2]f32 = { { 0.0, -1.0 }, { 0.0, 1.0 }, { -1.0, 0.0 }, { 1.0, 0.0 } }
+
+GameState			::enum { TITLE, GAMEPLAY, VICTORY, DEFEAT }
+current_state		:GameState
 
 main :: proc() {
 
@@ -122,21 +124,40 @@ main :: proc() {
 	snd_wilhelm = rl.LoadSound("resources/wilhelm.wav")
 	defer rl.UnloadSound(snd_wilhelm)
 
-	InitGame()
-
-    for !rl.WindowShouldClose()    // Detect window close button or ESC key
+	InitWave()
+    for !rl.WindowShouldClose()
 	{
-        UpdateGame()
+        switch current_state {
+			case .TITLE:
+				if rl.IsKeyPressed(.ENTER) || rl.IsMouseButtonPressed(.LEFT) {
+					current_state = .GAMEPLAY
+					wave = 1
+					score = 0
+					InitWave()
+					gameOver = false
+				}
+
+			case .GAMEPLAY:
+				UpdateGame()
+
+			case .VICTORY, .DEFEAT:
+				if rl.IsKeyPressed(.ENTER) || rl.IsMouseButtonPressed(.LEFT) {
+					current_state = .GAMEPLAY
+					wave = 1
+					score = 0
+					InitWave()
+					gameOver = false
+				}
+
+		}
 		RenderFrame()
 		DrawFrame()
 	}
 	
 	rl.UnloadRenderTexture(render_target)
 	rl.CloseAudioDevice()
-	rl.CloseWindow()	// Close window and OpenGL context
-
+	rl.CloseWindow()
 	return
-	
 }
 
 // random value to get a 'event' activation
@@ -176,7 +197,7 @@ UpdateGame :: proc() {
 			if player.position.x < 0 do player.position.x = 0
             if player.position.y + PLAYER_HEIGHT > f32(screenHeight) do player.position.y = f32(screenHeight) - PLAYER_HEIGHT
             if player.position.y < 0 do player.position.y = 0
-			
+
 			// get mouse position and adjust rotation of 'weapon'
 			mpos := rl.GetMousePosition() / rl.Vector2 { cast(f32)rl.GetScreenWidth(), cast(f32)rl.GetScreenHeight() }
 			hlen := (rl.Vector2) { mpos.x - player.position.x / cast(f32)screenWidth, player.position.y / cast(f32)screenHeight - mpos.y}
@@ -248,16 +269,21 @@ UpdateGame :: proc() {
 			}
 
 			// Collision logic: player vs robots
-			player.collider = (rl.Vector3){ player.position.x + PLAYER_WIDTH/2, player.position.y + PLAYER_HEIGHT/2, PLAYER_WIDTH/2 }
+			player.collider = { player.position.x, player.position.y, PLAYER_WIDTH, PLAYER_HEIGHT }
 
 			for a := 0; a < active_entities + NUM_CIVILIANS; a += 1 {
-				if rl.CheckCollisionPointRec( { player.collider.x, player.collider.y }, { entities[a].position.x, entities[a].position.y, entities[a].shape.x, entities[a].shape.y}) && entities[a].active {
+				if rl.CheckCollisionRecs( player.collider, entities[a].collider ) && entities[a].active {
 					if entities[a].type == .CIVILIAN {
 						rl.PlaySound(snd_thrust)
 						score += 1000
 						entities[a].active = false
 						destroyed_civs += 1
-					} else do gameOver = true
+					} else {
+						when !GOD_MODE {
+							gameOver = true
+							current_state = .DEFEAT
+						}
+					}
 				}
 			}
 
@@ -277,6 +303,7 @@ UpdateGame :: proc() {
 						entities[i].position.x += entities[i].direction.x*entities[i].speed.x
 						entities[i].position.y += entities[i].direction.y*entities[i].speed.y
 					}
+					entities[i].collider = { entities[i].position.x, entities[i].position.y, entities[i].shape.x, entities[i].shape.y }
 				}
 			}
 
@@ -286,7 +313,7 @@ UpdateGame :: proc() {
 			for i := 0; i < len(shot); i += 1 {
 				if shot[i].active {
 					for a := 0; a < active_entities + NUM_CIVILIANS; a += 1 {
-						if entities[a].active && rl.CheckCollisionCircleRec(shot[i].position, shot[i].radius, { entities[a].position.x, entities[a].position.y, entities[a].shape.x, entities[a].shape.y} ) {
+						if entities[a].active && rl.CheckCollisionCircleRec(shot[i].position, shot[i].radius, entities[a].collider ) { // { entities[a].position.x, entities[a].position.y, entities[a].shape.x, entities[a].shape.y} ) {
 							
 							if shot[i].type == .CIVILIAN && entities[a].type != .CIVILIAN {
 								entities[a].hits -= 1
@@ -306,9 +333,13 @@ UpdateGame :: proc() {
 							}
 						} else {
 							
-							if shot[i].type > .CIVILIAN && rl.CheckCollisionCircleRec(shot[i].position, shot[i].radius, { player.position.x, player.position.y, PLAYER_WIDTH, PLAYER_HEIGHT}) {
-								rl.PlaySound(snd_wilhelm)
-								gameOver = true
+							if shot[i].type > .CIVILIAN && rl.CheckCollisionCircleRec(shot[i].position, shot[i].radius, player.collider ) {
+								
+								when !GOD_MODE {
+									rl.PlaySound(snd_wilhelm)
+									gameOver = true
+									current_state = .DEFEAT
+								}
 							}
 
 						}
@@ -321,22 +352,15 @@ UpdateGame :: proc() {
 			wave += 1
 			if wave == MAX_WAVE { victory = true }
 			else {
-                InitGame()
+                InitWave()
 			}
 		}
 
-	} else {
-		if rl.IsKeyPressed(.ENTER)
-		{
-			wave = 1
-			score = 0
-			InitGame()
-			gameOver = false
-		}
-	}
+	} 
 }
 
 patrol_move :: proc( entity: ^Entity) {
+	
 	// entity must be active if this proc is called
 	
 	if entity.position.x <= entity.shape.x do entity.direction = directions[Random_Direction.RIGHT]
@@ -353,19 +377,19 @@ patrol_move :: proc( entity: ^Entity) {
 	}
 }
 
-InitGame :: proc() {
+InitWave :: proc() {
 	
 	posx, posy	:c.int
 	velx, vely	:c.int
 
 	victory = false
 	pause = false
-	
 			
 	// Initialization player
     player.position = (rl.Vector2){ f32(screenWidth/2), f32(screenHeight/2) - PLAYER_HEIGHT/2}
 	player.rotation = 0
-	player.collider = (rl.Vector3){player.position.x + PLAYER_WIDTH/2, player.position.y + PLAYER_HEIGHT/2, 0}
+	//player.collider = (rl.Vector3){player.position.x + PLAYER_WIDTH/2, player.position.y + PLAYER_HEIGHT/2, 0}
+	player.collider = { player.position.x, player.position.y, PLAYER_WIDTH, PLAYER_HEIGHT } //(rl.Vector3){player.position.x + PLAYER_WIDTH/2, player.position.y + PLAYER_HEIGHT/2, 0}
     player.color = rl.MAROON
 
     destroyed_entities = 0
@@ -447,7 +471,7 @@ InitGame :: proc() {
 		entities[active_entities+civs].hits = 20
 		entities[active_entities+civs].active = true
 		entities[active_entities+civs].shape = {PLAYER_WIDTH, PLAYER_HEIGHT}
-		entities[active_entities+civs].speed = PLAYER_SPEED
+		entities[active_entities+civs].speed = PLAYER_SPEED - 0.5
 		entities[active_entities+civs].color = rl.GREEN
 		dir := rand.choice_enum(Random_Direction)
 		entities[active_entities+civs].direction = directions[dir]
@@ -455,6 +479,6 @@ InitGame :: proc() {
 		if civs >= NUM_CIVILIANS do break
 	}
 
-    draw_wave_entry()
+	if current_state == .GAMEPLAY do draw_wave_entry()
 
 }
