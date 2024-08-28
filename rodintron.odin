@@ -2,7 +2,7 @@ package rodintron
 
 // robotron type game
 
-//>import "core:fmt"
+import "core:fmt"
 import "core:math"
 import rl "vendor:raylib"
 import "core:c"
@@ -60,16 +60,23 @@ snd_lazer2			:rl.Sound
 snd_explosion1		:rl.Sound
 snd_thrust			:rl.Sound
 snd_wilhelm			:rl.Sound
+sprite_texture		:rl.Texture
+
+frame_update_time	:f32 = 0.2
+frame_current_time	:f32
 
 Player :: struct {
 	position	:rl.Vector2,
 	rotation	:f32,
 	collider	:rl.Rectangle,
+	source		:rl.Rectangle,
+	frame		:int,
+	facing		:Facing_Direction,
 	color		:rl.Color,
 }
 
 Projectile :: struct {
-	type		:Entity_Type,
+	type		:Entity_Type,	// the entity type that fired this projectile
 	position	:rl.Vector2,
 	speed		:rl.Vector2,
 	radius		:f32,
@@ -84,6 +91,9 @@ Entity :: struct {
     speed       :rl.Vector2,
 	direction	:rl.Vector2,		// use this for movement directions for robots that don't follow player format [+/-1, +/-1]
 	shape		:rl.Vector2,
+	source		:rl.Rectangle,
+	frame		:int,
+	facing		:Facing_Direction,
 	collider	:rl.Rectangle,	// temporary collider + drawing shape
     color       :rl.Color,		// temp for shape. will be replaced by sprite colors.
 	hits		:u8,
@@ -95,13 +105,14 @@ Entity_Type :: enum {
 }
 Entity_Speeds		:[]f32 = { PLAYER_SPEED, ROB_BRUTE_SPEED, ROB_PATROL_SPEED, ROB_SENTRY_SPEED }
 
-Random_Direction :: enum {
+Facing_Direction :: enum {
 	UP, DOWN, LEFT, RIGHT
 }
 directions			:[4][2]f32 = { { 0.0, -1.0 }, { 0.0, 1.0 }, { -1.0, 0.0 }, { 1.0, 0.0 } }
 
 GameState			::enum { TITLE, GAMEPLAY, VICTORY, DEFEAT }
 current_state		:GameState
+
 
 main :: proc() {
 
@@ -111,8 +122,9 @@ main :: proc() {
 	render_target = rl.LoadRenderTexture(render_screen_width, render_screen_height)
 	rl.SetTextureFilter(render_target.texture, .BILINEAR)
 	rl.SetTargetFPS(60)
-	rl.InitAudioDevice()
 
+	// load resources
+	rl.InitAudioDevice()
 	snd_lazer1 = rl.LoadSound("resources/lazer1.wav")
 	defer rl.UnloadSound(snd_lazer1)
 	snd_lazer2 = rl.LoadSound("resources/lazer2.wav")
@@ -123,6 +135,11 @@ main :: proc() {
 	defer rl.UnloadSound(snd_thrust)
 	snd_wilhelm = rl.LoadSound("resources/wilhelm.wav")
 	defer rl.UnloadSound(snd_wilhelm)
+
+	sprite_texture = rl.LoadTexture("resources/sprites.png")
+	defer rl.UnloadTexture(sprite_texture)
+
+
 
 	InitWave()
     for !rl.WindowShouldClose()
@@ -184,11 +201,51 @@ UpdateGame :: proc() {
 			if player.rotation > 360 do player.rotation = 0
 			if player.rotation < 0 do player.rotation = 360
 			
-			// Player logic: velocity
-            if rl.IsKeyDown(.W) do player.position.y -= 2*PLAYER_SPEED
-            if rl.IsKeyDown(.S) do player.position.y += 2*PLAYER_SPEED
-            if rl.IsKeyDown(.A) do player.position.x -= 2*PLAYER_SPEED
-            if rl.IsKeyDown(.D) do player.position.x += 2*PLAYER_SPEED
+			// Player logic: movement direction
+            if rl.IsKeyDown(.W) {
+				player.position.y -= 2*PLAYER_SPEED
+				player.facing = .UP
+			}
+            if rl.IsKeyDown(.S) {
+				player.position.y += 2*PLAYER_SPEED
+				player.facing = .DOWN
+			}
+            if rl.IsKeyDown(.A) {
+				player.position.x -= 2*PLAYER_SPEED
+				player.facing = .LEFT
+			}
+            if rl.IsKeyDown(.D) {
+				player.position.x += 2*PLAYER_SPEED
+				player.facing = .RIGHT
+			}
+
+			// update player animaion
+			frame_current_time += rl.GetFrameTime()
+			if frame_current_time > frame_update_time {
+				frame_current_time = 0
+				if player.frame == 0 do player.frame = 1
+				else do player.frame = 0
+			}
+			player.source.width = PLAYER_WIDTH
+			switch player.facing {
+				case .DOWN:
+					player.source.x = 2*PLAYER_WIDTH
+					if player.frame > 0 do player.source.width = -player.source.width
+
+				case .UP:
+					player.source.x = 3*PLAYER_WIDTH
+					if player.frame > 0 do player.source.width = -player.source.width							
+
+				case .LEFT:
+					if player.frame == 0 do player.source.x = 0
+					else do player.source.x = 1*PLAYER_WIDTH
+					
+				case .RIGHT:
+					if player.frame == 0 do player.source.x = 0
+					else do player.source.x = 1*PLAYER_WIDTH
+					player.source.width = -PLAYER_WIDTH
+
+			}
 
 			// Collision logic: player vs walls
             // walls are invisible, movement limiter. player must stay in the "game world"
@@ -313,7 +370,7 @@ UpdateGame :: proc() {
 			for i := 0; i < len(shot); i += 1 {
 				if shot[i].active {
 					for a := 0; a < active_entities + NUM_CIVILIANS; a += 1 {
-						if entities[a].active && rl.CheckCollisionCircleRec(shot[i].position, shot[i].radius, entities[a].collider ) { // { entities[a].position.x, entities[a].position.y, entities[a].shape.x, entities[a].shape.y} ) {
+						if entities[a].active && rl.CheckCollisionCircleRec(shot[i].position, shot[i].radius, entities[a].collider ) {
 							
 							if shot[i].type == .CIVILIAN && entities[a].type != .CIVILIAN {
 								entities[a].hits -= 1
@@ -363,16 +420,16 @@ patrol_move :: proc( entity: ^Entity) {
 	
 	// entity must be active if this proc is called
 	
-	if entity.position.x <= entity.shape.x do entity.direction = directions[Random_Direction.RIGHT]
-	if entity.position.x >= f32(screenWidth) - entity.shape.x do entity.direction = directions[Random_Direction.LEFT]
-	if entity.position.y <= 0 do entity.direction = directions[Random_Direction.DOWN]
+	if entity.position.x <= entity.shape.x do entity.direction = directions[Facing_Direction.RIGHT]
+	if entity.position.x >= f32(screenWidth) - entity.shape.x do entity.direction = directions[Facing_Direction.LEFT]
+	if entity.position.y <= 0 do entity.direction = directions[Facing_Direction.DOWN]
 	if entity.position.y >= f32(screenHeight) - entity.shape.y{
-		entity.direction = directions[Random_Direction.UP]
+		entity.direction = directions[Facing_Direction.UP]
 		entity.position.y = f32(screenHeight) - entity.shape.y
 	}
 
 	if random_tick() {
-		dir := rand.choice_enum(Random_Direction)
+		dir := rand.choice_enum(Facing_Direction)
 		entity.direction = directions[dir]
 	}
 }
@@ -388,9 +445,13 @@ InitWave :: proc() {
 	// Initialization player
     player.position = (rl.Vector2){ f32(screenWidth/2), f32(screenHeight/2) - PLAYER_HEIGHT/2}
 	player.rotation = 0
-	//player.collider = (rl.Vector3){player.position.x + PLAYER_WIDTH/2, player.position.y + PLAYER_HEIGHT/2, 0}
 	player.collider = { player.position.x, player.position.y, PLAYER_WIDTH, PLAYER_HEIGHT } //(rl.Vector3){player.position.x + PLAYER_WIDTH/2, player.position.y + PLAYER_HEIGHT/2, 0}
-    player.color = rl.MAROON
+    player.frame = 0
+	player.facing = .DOWN
+	
+	// animation frame info that never changes
+	player.source.height = PLAYER_HEIGHT
+
 
     destroyed_entities = 0
 	destroyed_civs = 0
@@ -442,7 +503,7 @@ InitWave :: proc() {
 				entity_shape.y = ROB_PATROL_HEIGHT
 				entities[i].hits = 2
 				entities[i].color = rl.ORANGE
-				dir := rand.choice_enum( Random_Direction)
+				dir := rand.choice_enum( Facing_Direction)
 				entities[i].direction = directions[dir]
 			case .SENTRY:
 				entity_shape.x = ROB_SENTRY_WIDTH
@@ -473,7 +534,7 @@ InitWave :: proc() {
 		entities[active_entities+civs].shape = {PLAYER_WIDTH, PLAYER_HEIGHT}
 		entities[active_entities+civs].speed = PLAYER_SPEED - 0.5
 		entities[active_entities+civs].color = rl.GREEN
-		dir := rand.choice_enum(Random_Direction)
+		dir := rand.choice_enum(Facing_Direction)
 		entities[active_entities+civs].direction = directions[dir]
 		civs +=1
 		if civs >= NUM_CIVILIANS do break

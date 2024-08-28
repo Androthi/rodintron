@@ -34,12 +34,12 @@ RenderFrame:: proc() {
 		case .GAMEPLAY:
 			if !gameOver {
 						
-				// Draw player
-				rl.DrawRectangle( c.int(player.position.x), c.int(player.position.y), PLAYER_WIDTH, PLAYER_HEIGHT, rl.MAROON)
+				// TODO Draw player
+				rl.DrawTexturePro(sprite_texture, player.source, player.collider, 0, 0, rl.WHITE)
+				//rl.DrawRectangleRec(player.collider, player.color)
 
-				stick := (rl.Vector2){ (player.position.x + math.sin(player.rotation*rl.DEG2RAD)*(PLAYER_HEIGHT)), player.position.y - math.cos(player.rotation*rl.DEG2RAD)*(PLAYER_HEIGHT) }
-				rl.DrawLineEx( stick, stick+10, 5, rl.BROWN)
-
+				stick := (rl.Vector2){ (player.position.x + math.sin(player.rotation*rl.DEG2RAD)*(PLAYER_HEIGHT/2)), player.position.y - math.cos(player.rotation*rl.DEG2RAD)*(PLAYER_HEIGHT/2) }
+				rl.DrawLineEx( stick, stick+6, 5, rl.BROWN)
 
 				// Draw entities
 				for i:= 0; i < active_entities + NUM_CIVILIANS; i+=1
