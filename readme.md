@@ -2,9 +2,7 @@
 
 Robotron style game written in Odin
 
-This is WIP
-
-Current state is a playable game that uses rectangles for graphics.
+![alt text](https://github.com/Androthi/rodintron/blob/master/resources/rodintron.jpg)
 
 ## Updates
 
