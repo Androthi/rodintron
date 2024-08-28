@@ -2,7 +2,6 @@ package rodintron
 
 // robotron type game
 
-import "core:fmt"
 import "core:math"
 import rl "vendor:raylib"
 import "core:c"
@@ -181,6 +180,12 @@ random_tick :: proc() -> bool {
 	return false
 }
 
+get_rotation :: proc( vec:rl.Vector2 ) -> f32 {
+	rads := math.atan2_f32(vec.x, vec.y)
+	return rads*rl.RAD2DEG
+}
+									
+
 // Update game (one frame)
 UpdateGame :: proc() {
 
@@ -261,9 +266,7 @@ UpdateGame :: proc() {
 
 			// get mouse position and adjust rotation of 'weapon'
 			mpos := rl.GetMousePosition() / rl.Vector2 { cast(f32)rl.GetScreenWidth(), cast(f32)rl.GetScreenHeight() }
-			hlen := (rl.Vector2) { mpos.x - player.position.x / cast(f32)screenWidth, player.position.y / cast(f32)screenHeight - mpos.y}
-            rot := math.atan2_f32 (hlen.x, hlen.y)
-            player.rotation = rot*rl.RAD2DEG
+            player.rotation = get_rotation( { mpos.x - player.position.x / cast(f32)screenWidth, player.position.y / cast(f32)screenHeight - mpos.y} )
 			
 			// Player shot logic
 			if rl.IsKeyPressed(.SPACE) || rl.IsMouseButtonPressed(.LEFT) {
@@ -303,13 +306,12 @@ UpdateGame :: proc() {
 								// this robot will shoot
 								for j := SHOTS_MAX; j < len(shot)-SHOTS_MAX; j += 1 {
 									if !shot[j].active {
+										rl.PlaySound(snd_lazer2)
 										shot[j].color = rl.ORANGE
 										shot[j].position = {entities[i].position.x + entities[i].shape.x/2, entities[i].position.y + entities[i].shape.y/2}
 										shot[j].active = true
 										shot[j].type = entities[i].type
-										hlen := (rl.Vector2) { player.position.x - entities[i].position.x, entities[i].position.y - player.position.y}
-										rot := math.atan2_f32 (hlen.x, hlen.y)
-										shot[j].rotation = rot*rl.RAD2DEG
+										shot[j].rotation = get_rotation( { player.position.x - entities[i].position.x, entities[i].position.y - player.position.y} )
 										shot[j].speed.x = 2.5*math.sin(shot[j].rotation*rl.DEG2RAD)*SHOTS_SPEED
 										shot[j].speed.y = 2.5*math.cos(shot[j].rotation*rl.DEG2RAD)*SHOTS_SPEED
 									}
@@ -525,7 +527,6 @@ patrol_move :: proc( entity: ^Entity) {
 InitWave :: proc() {
 	
 	posx, posy	:c.int
-	velx, vely	:c.int
 
 	victory = false
 	pause = false
@@ -616,9 +617,9 @@ InitWave :: proc() {
 
 		// fix position to make sure none of them are off the screen
 		if entities[i].position.x <= entities[i].shape.x do entities[i].position.x = 0
-		if entities[i].position.x >= f32(screenWidth) + entities[i].shape.x do entities[i].position.x = f32(screenWidth)-entities[i].shape.x
+		if entities[i].position.x + entities[i].shape.x > f32(screenWidth)  do entities[i].position.x = f32(screenWidth)-entities[i].shape.x
 		if entities[i].position.y <= 0 - entities[i].shape.y do entities[i].position.y = 0
-		if entities[i].position.y >= f32(screenHeight) - entities[i].shape.y do entities[i].position.y = f32(screenHeight)-entities[i].shape.y
+		if entities[i].position.y + entities[i].shape.y > f32(screenHeight) do entities[i].position.y = f32(screenHeight)-entities[i].shape.y
 	
 	}
 
