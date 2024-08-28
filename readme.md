@@ -8,6 +8,11 @@ Current state is a playable game that uses rectangles for graphics.
 
 ## Updates
 
+08/28/24
+    finished animated sprites.
+    at this point, the game is "finished"
+    will go into maintenence mode.
+
 08/27/24
     player sprite added
 

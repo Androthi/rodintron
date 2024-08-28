@@ -17,16 +17,16 @@ PLAYER_SPEED		:: 3.0
 SHOTS_MAX			:: 4
 SHOTS_SPEED			:: 5
 
-ROB_BRUTE_WIDTH     :: 30
+ROB_BRUTE_WIDTH     :: 35
 ROB_BRUTE_HEIGHT    :: 50
 ROB_BRUTE_SPEED		:: 2
 
-ROB_PATROL_WIDTH	:: 40
-ROB_PATROL_HEIGHT	:: 40
+ROB_PATROL_WIDTH	:: 35
+ROB_PATROL_HEIGHT	:: 45
 ROB_PATROL_SPEED	:: 1
 
 ROB_SENTRY_WIDTH	:: 30
-ROB_SENTRY_HEIGHT	:: 30
+ROB_SENTRY_HEIGHT	:: 40
 ROB_SENTRY_SPEED	:: 0
 
 screenWidth				:i32: 1200
@@ -72,7 +72,6 @@ Player :: struct {
 	source		:rl.Rectangle,
 	frame		:int,
 	facing		:Facing_Direction,
-	color		:rl.Color,
 }
 
 Projectile :: struct {
@@ -95,7 +94,6 @@ Entity :: struct {
 	frame		:int,
 	facing		:Facing_Direction,
 	collider	:rl.Rectangle,	// temporary collider + drawing shape
-    color       :rl.Color,		// temp for shape. will be replaced by sprite colors.
 	hits		:u8,
     active      :bool,
 }
@@ -219,13 +217,19 @@ UpdateGame :: proc() {
 				player.facing = .RIGHT
 			}
 
+			update_frame := false
 			// update player animaion
 			frame_current_time += rl.GetFrameTime()
 			if frame_current_time > frame_update_time {
+				update_frame = true
 				frame_current_time = 0
+			}
+			
+			if update_frame{
 				if player.frame == 0 do player.frame = 1
 				else do player.frame = 0
 			}
+
 			player.source.width = PLAYER_WIDTH
 			switch player.facing {
 				case .DOWN:
@@ -276,27 +280,100 @@ UpdateGame :: proc() {
 				}
 			}
 
-			// see if robots will shoot
-			for i := 0; i < active_entities; i += 1 {
+			// update entity animations and check if shooty robots will shoot
+			for i := 0; i < active_entities+NUM_CIVILIANS; i += 1 {
 				if entities[i].active {
-					if entities[i].type == .SENTRY {
-						if random_tick() {
-							// this robot will shoot
-							for j := SHOTS_MAX; j < len(shot)-SHOTS_MAX; j += 1 {
-								if !shot[j].active {
-									shot[j].color = rl.ORANGE
-									shot[j].position = {entities[i].position.x + entities[i].shape.x/2, entities[i].position.y + entities[i].shape.y/2}
-									shot[j].active = true
-									shot[j].type = entities[i].type
-									hlen := (rl.Vector2) { player.position.x - entities[i].position.x, entities[i].position.y - player.position.y}
-									rot := math.atan2_f32 (hlen.x, hlen.y)
-									shot[j].rotation = rot*rl.RAD2DEG
-									shot[j].speed.x = 2.5*math.sin(shot[j].rotation*rl.DEG2RAD)*SHOTS_SPEED
-									shot[j].speed.y = 2.5*math.cos(shot[j].rotation*rl.DEG2RAD)*SHOTS_SPEED
+					
+					switch entities[i].type {
+						case .SENTRY:
+
+							if update_frame {
+								if entities[i].frame == 0 {
+									entities[i].frame = 1
+									entities[i].source.x = 1*ROB_SENTRY_WIDTH
+								}
+								else {
+									entities[i].frame = 0
+									entities[i].source.x = 0
 								}
 							}
+
+							// see if robots will shoot
+							if random_tick() {
+								// this robot will shoot
+								for j := SHOTS_MAX; j < len(shot)-SHOTS_MAX; j += 1 {
+									if !shot[j].active {
+										shot[j].color = rl.ORANGE
+										shot[j].position = {entities[i].position.x + entities[i].shape.x/2, entities[i].position.y + entities[i].shape.y/2}
+										shot[j].active = true
+										shot[j].type = entities[i].type
+										hlen := (rl.Vector2) { player.position.x - entities[i].position.x, entities[i].position.y - player.position.y}
+										rot := math.atan2_f32 (hlen.x, hlen.y)
+										shot[j].rotation = rot*rl.RAD2DEG
+										shot[j].speed.x = 2.5*math.sin(shot[j].rotation*rl.DEG2RAD)*SHOTS_SPEED
+										shot[j].speed.y = 2.5*math.cos(shot[j].rotation*rl.DEG2RAD)*SHOTS_SPEED
+									}
+								}
+							}
+						
+						case .BRUTE:
+
+							if update_frame do entities[i].source.width = -entities[i].source.width
+						
+						case .PATROL:
+
+							if update_frame {
+								if entities[i].frame == 0 do entities[i].frame = 1
+								else do entities[i].frame = 0
+							}
+							switch entities[i].facing {
+
+								case .DOWN, .UP:
+									entities[i].source.x = 2*ROB_PATROL_WIDTH
+									if entities[i].frame == 1 do entities[i].source.width = -entities[i].source.width
+
+								case .LEFT:
+									
+									if entities[i].frame == 0 do entities[i].source.x = 0
+									else do entities[i].source.x = 1*ROB_PATROL_WIDTH
+									entities[i].source.width = ROB_PATROL_WIDTH
+									
+								case .RIGHT:
+									if entities[i].frame == 0 do entities[i].source.x = 0
+									else do entities[i].source.x = 1*ROB_PATROL_WIDTH
+									if entities[i].source.width >0 do entities[i].source.width = -ROB_PATROL_WIDTH
+				
+							}
+						
+						case .CIVILIAN:
+
+							entities[i].source.width = PLAYER_WIDTH
+							if update_frame {
+								if entities[i].frame == 0 do entities[i].frame = 1
+								else do entities[i].frame = 0
+							}
+
+							switch entities[i].facing {
+								case .DOWN:
+									entities[i].source.x = 2*PLAYER_WIDTH
+									if entities[i].frame > 0 do entities[i].source.width = -PLAYER_WIDTH
+				
+								case .UP:
+									entities[i].source.x = 3*PLAYER_WIDTH
+									if entities[i].frame > 0 do entities[i].source.width = -PLAYER_WIDTH							
+				
+								case .LEFT:
+									if entities[i].frame == 0 do entities[i].source.x = 0
+									else do entities[i].source.x = 1*PLAYER_WIDTH
+									entities[i].source.width = PLAYER_WIDTH
+									
+								case .RIGHT:
+									if entities[i].frame == 0 do entities[i].source.x = 0
+									else do entities[i].source.x = 1*PLAYER_WIDTH
+									entities[i].source.width = -PLAYER_WIDTH
+				
+							}
 						}
-					}
 				}
 			}
 
@@ -420,17 +497,28 @@ patrol_move :: proc( entity: ^Entity) {
 	
 	// entity must be active if this proc is called
 	
-	if entity.position.x <= entity.shape.x do entity.direction = directions[Facing_Direction.RIGHT]
-	if entity.position.x >= f32(screenWidth) - entity.shape.x do entity.direction = directions[Facing_Direction.LEFT]
-	if entity.position.y <= 0 do entity.direction = directions[Facing_Direction.DOWN]
+	if entity.position.x <= entity.shape.x {
+		entity.direction = directions[Facing_Direction.RIGHT]
+		entity.facing = Facing_Direction.RIGHT
+	}
+	if entity.position.x >= f32(screenWidth) - entity.shape.x {
+		entity.direction = directions[Facing_Direction.LEFT]
+		entity.facing = Facing_Direction.LEFT
+	}
+	if entity.position.y <= 0 {
+		entity.direction = directions[Facing_Direction.DOWN]
+		entity.facing = Facing_Direction.DOWN
+	}
 	if entity.position.y >= f32(screenHeight) - entity.shape.y{
 		entity.direction = directions[Facing_Direction.UP]
 		entity.position.y = f32(screenHeight) - entity.shape.y
+		entity.facing = Facing_Direction.UP
 	}
 
 	if random_tick() {
-		dir := rand.choice_enum(Facing_Direction)
-		entity.direction = directions[dir]
+		entity.facing = rand.choice_enum(Facing_Direction)
+		entity.direction = directions[entity.facing]
+		
 	}
 }
 
@@ -451,7 +539,6 @@ InitWave :: proc() {
 	
 	// animation frame info that never changes
 	player.source.height = PLAYER_HEIGHT
-
 
     destroyed_entities = 0
 	destroyed_civs = 0
@@ -497,19 +584,31 @@ InitWave :: proc() {
 				entity_shape.x = ROB_BRUTE_WIDTH
 				entity_shape.y = ROB_BRUTE_HEIGHT
 				entities[i].hits = 1
-				entities[i].color = rl.BLUE
+				entities[i].source.height = ROB_BRUTE_HEIGHT
+				entities[i].facing = .DOWN
+				entities[i].source.width = ROB_BRUTE_WIDTH
+				entities[i].source.x = 0
+				entities[i].source.y = 50
 			case .PATROL:
 				entity_shape.x = ROB_PATROL_WIDTH
 				entity_shape.y = ROB_PATROL_HEIGHT
 				entities[i].hits = 2
-				entities[i].color = rl.ORANGE
-				dir := rand.choice_enum( Facing_Direction)
-				entities[i].direction = directions[dir]
+				entities[i].source.height = ROB_PATROL_HEIGHT
+				entities[i].facing = rand.choice_enum( Facing_Direction)
+				entities[i].direction = directions[entities[i].facing]
+				entities[i].source.x = 0
+				entities[i].source.y = 140
+				entities[i].source.width = ROB_PATROL_WIDTH
 			case .SENTRY:
 				entity_shape.x = ROB_SENTRY_WIDTH
 				entity_shape.y = ROB_SENTRY_HEIGHT
+				entities[i].source.height = ROB_SENTRY_HEIGHT
+				entities[i].facing = .DOWN
 				entities[i].hits = 5
-				entities[i].color = rl.PURPLE
+				entities[i].source.x = 0
+				entities[i].source.y = 100
+				entities[i].source.width = ROB_SENTRY_WIDTH
+				entities[i].source.height = ROB_SENTRY_HEIGHT
 		}
 		entities[i].shape = entity_shape
 		entities[i].collider = (rl.Rectangle){ f32(posx), f32(posy), entity_shape.x, entity_shape.y }
@@ -529,13 +628,13 @@ InitWave :: proc() {
 		posy := rl.GetRandomValue(0, screenHeight - (PLAYER_HEIGHT*2))
 		entities[active_entities+civs].position = { f32(posx), f32(posy) }
 		entities[active_entities+civs].type = .CIVILIAN
-		entities[active_entities+civs].hits = 20
 		entities[active_entities+civs].active = true
 		entities[active_entities+civs].shape = {PLAYER_WIDTH, PLAYER_HEIGHT}
 		entities[active_entities+civs].speed = PLAYER_SPEED - 0.5
-		entities[active_entities+civs].color = rl.GREEN
-		dir := rand.choice_enum(Facing_Direction)
-		entities[active_entities+civs].direction = directions[dir]
+		entities[active_entities+civs].facing = rand.choice_enum(Facing_Direction)
+		entities[active_entities+civs].direction = directions[entities[active_entities+civs].facing]
+		entities[active_entities+civs].source.height = PLAYER_HEIGHT
+		entities[active_entities+civs].source.y = 200
 		civs +=1
 		if civs >= NUM_CIVILIANS do break
 	}

@@ -34,9 +34,8 @@ RenderFrame:: proc() {
 		case .GAMEPLAY:
 			if !gameOver {
 						
-				// TODO Draw player
+				// draw player
 				rl.DrawTexturePro(sprite_texture, player.source, player.collider, 0, 0, rl.WHITE)
-				//rl.DrawRectangleRec(player.collider, player.color)
 
 				stick := (rl.Vector2){ (player.position.x + math.sin(player.rotation*rl.DEG2RAD)*(PLAYER_HEIGHT/2)), player.position.y - math.cos(player.rotation*rl.DEG2RAD)*(PLAYER_HEIGHT/2) }
 				rl.DrawLineEx( stick, stick+6, 5, rl.BROWN)
@@ -45,7 +44,7 @@ RenderFrame:: proc() {
 				for i:= 0; i < active_entities + NUM_CIVILIANS; i+=1
 				{
 					if entities[i].active {
-						rl.DrawRectangleV( { entities[i].position.x, entities[i].position.y }, {entities[i].shape.x, entities[i].shape.y }, entities[i].color)
+						rl.DrawTexturePro(sprite_texture, entities[i].source, entities[i].collider, 0, 0, rl.WHITE)
 					}
 				}
 				
